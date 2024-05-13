@@ -1,5 +1,6 @@
 import Image from "next/image"
 import { HomeContainer, Product } from "../styles/pages/home"
+import Head from 'next/head'
 
 import {useKeenSlider} from 'keen-slider/react'
 
@@ -8,8 +9,21 @@ import camiseta2 from '../assets/camisetas/2.png'
 import camiseta3 from '../assets/camisetas/3.png'
 
 import 'keen-slider/keen-slider.min.css'
+import Stripe from "stripe"
+import { stripe } from "../lib/stripe"
+import { GetStaticProps } from "next"
 
-export default function Home() {
+interface HomeProps {
+  products:{
+    id: string
+    name: string
+    imageUrl: string
+    price: string
+  }[]//os colchetes são para transformar em array e o map funcionar
+}
+
+
+export default function Home({products}: HomeProps) {
 
   const [sliderRef] = useKeenSlider({
     loop: true,
@@ -20,42 +34,53 @@ export default function Home() {
   })
 
   return (
-    <HomeContainer ref={sliderRef} className="keen-slider">
-      <Product className="keen-slider__slide">
-        <Image src={camiseta1} width={520} height={480} alt=""/>
+    <>
+      <Head>
+        <title>Home | Ignite Shop</title>
+      </Head>
+      <HomeContainer ref={sliderRef} className="keen-slider">
+      {products.map(product => {
+        return(
+          <Product href={`/product/${product.id}`} key={product.id} className="keen-slider__slide" prefetch={false}>
+            <Image src={product.imageUrl} width={520} height={480} alt=""/>
 
-        <footer>
-          <strong>Camiseta X</strong>
-          <span>79,99</span>
-        </footer>
-      </Product>
-
-      <Product className="keen-slider__slide">
-        <Image src={camiseta3} width={520} height={480} alt=""/>
-
-        <footer>
-          <strong>Camiseta Y</strong>
-          <span>59,99</span>
-        </footer>
-      </Product>
-
-      <Product className="keen-slider__slide">
-        <Image src={camiseta2} width={520} height={480} alt=""/>
-
-        <footer>
-          <strong>Camiseta Z</strong>
-          <span>99,99</span>
-        </footer>
-      </Product>
-
-      <Product className="keen-slider__slide">
-        <Image src={camiseta3} width={520} height={480} alt=""/>
-
-        <footer>
-          <strong>Camiseta A</strong>
-          <span>99,99</span>
-        </footer>
-      </Product>
+            <footer>
+              <strong>{product.name}</strong>
+              <span>{product.price}</span>
+            </footer>
+          </Product>
+        )
+      })}
     </HomeContainer>
+    </>
   );
+}
+
+export const getStaticProps:GetStaticProps = async () => {
+  const response = await stripe.products.list({
+    expand: ['data.default_price']
+  });
+
+  const products = response.data.map(product => {
+    const price = product.default_price as Stripe.Price;
+
+    return{
+      id: product.id,
+      name: product.name,
+      imageUrl: product.images[0],
+      price: new Intl.NumberFormat('pt-BR', {
+        style:'currency',
+        currency: 'BRL'
+      }).format(price.unit_amount! / 100),
+      //o preço vem em centavos por isso é dividido por 100
+    }
+  })
+
+
+  return{
+    props: {
+      products
+    },
+    revalidate: 60*60*2,//=2horas
+  }
 }
